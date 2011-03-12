@@ -1,6 +1,6 @@
 This is the simpliest heartbeat algorithm you'll find for nodejs.
 
-This library consists in two classes, one waits for connections and other that connects and says its alive. Its a simple tool to inspect if my remote servers are up or down ;)
+This library consists in two classes: one that waits for connections and other that connects and says it is alive. It'ss a simple tool to inspect if my remote servers are up or down ;)
 
 The hb_client.js and hb_server.js inside src/ should suffice for you to understand how to run a heartbeat system between remote servers... 
 
