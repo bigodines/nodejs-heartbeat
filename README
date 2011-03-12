@@ -1,0 +1,12 @@
+This is the simpliest heartbeat algorithm you'll find for nodejs.
+
+The hb_client.js and hb_server.js inside src/ should suffice for you to understand how to run a heartbeat system between remote servers... 
+
+To run the tests you will need nodeunit (npm nodeunit and you are done!)
+
+contributors are always welcome.
+
+have fun!
+
+-
+bigo
