@@ -1,60 +1,85 @@
 var net = require("net");
-exports.client = function(host, port, pulse_interval/*, expert_mode=false*/) {
-	var start_pulse, pulse, connect, socket;
+exports.client = function(host, port/*, expert_mode=false*/) {
+	var pulse, connect, socket;
 	
 	pulse = function(socket) {
 		socket.write("alive", "utf8");
 	};
 
-	start_pulse = function(socket) {
-		//	pulse(socket);
-		setInterval(function() { pulse(socket); }, pulse_interval);
-	};
-
 	connect = function (net_interface) {
-		try {
-			socket = net_interface.createConnection(port, host);
-			socket.on("connect", this.start_pulse(socket));
-			
-		} catch (x) {
-			//		console.log(x);
-			console.log("cant connect. try again");
-		};
+		socket = net_interface.createConnection(port, host);
+		socket.write("alive", "utf8");
+		socket.on("error", function(x) {
+					  //		console.log(x);
+					  console.log("cant connect. try again");
+				  });
+		socket.on("data", function() { pulse(socket); });
+
 	};
 
 	if (arguments[3] === undefined) { // default (lame) mode
-	
-		if (pulse_interval === undefined) {
-			pulse_interval = 5*1000;	
-		};
-	
 		connect(net);
 	} 
 
 	return {
 		'pulse' : pulse,
-		'start_pulse' : start_pulse,
 		'connect' : connect
 	};
 }; // client
 
-exports.server = function (host, port) {
-	var clients = [];
-	var detector;
+exports.server = function (host, port/*, net*/) {
+	var net_interface = net, clients = [], zombies = [];
+	var find_zombies, start_server, ask_many, broadcast;
 	// detect dead machines
-	detector = function(period) {
-		var limit = new Date().getTime() - period;
-		if (period === undefined) {
-			period = 10*1000; // 10 seconds of tolerance between pulses
+	find_zombies = function(period, zombie_callback) {
+		var zombies = [],limit = new Date().getTime() - period;
+		if (period === undefined || period === null) {
+			period = 60*1000; // default is 60 seconds of tolerance between pulses
 		};
 		for (idx in clients) {
 			var last_seen = clients[idx];
-			console.log('comparing '+last_seen.hbtime+ 'with'+limit);
 			if (last_seen.hbtime < limit) {
-		 		console.log("machine down! --> "+last_seen.addr);			
+				zombie_callback(last_seen);
+				zombies.push(last_seen);
 			};
 		};
+		return zombies;
 	};
+
+	start_server = function() {
+		net_interface.createServer(function(socket) {
+									   var got_data = function(data) {
+										   clients[socket.remoteAddress] = {'addr':socket.remoteAddress, 
+																				 'hbtime':new Date().getTime(), 
+																				 'socket': socket};
+									   };
+									   socket.setEncoding("utf8");
+									   socket.on("data", got_data);
+								   }).listen(port, host);
+	};
+
+	/*send heartbeat message to many clients*/
+	ask_many = function(clients) {
+		var c;
+		for (idx in clients) {
+			c = clients[idx];
+			try {
+				c.socket.write("are u alive");
+			} catch (x) {
+				console.log("couldnt send message to: "+c.addr+" waiting for it to die");
+			}
+		};
+
+	};
+	
+	/*broadcast heartbeat message*/
+	broadcast = function() {
+		ask_many(clients);
+	};
+
+	if (arguments[2] !== undefined) {
+		net_interface = arguments[2];
+	}
 	
 	if (host === undefined) {
 		host = "127.0.0.1";
@@ -64,15 +89,15 @@ exports.server = function (host, port) {
 		port = 6688;
 	};
 	
-	net.createServer(function(socket) {
-						 socket.setEncoding("utf8");
-						 socket.on("data", function(data) {
-									   clients[socket.remoteAddress] = {'addr':socket.remoteAddress, 'hbtime':new Date().getTime()};
-								   });
-					 }).listen(port, host);
+	start_server();
 	
 	return { 
-		'detector' : detector
+		'find_zombies' : find_zombies,
+		'ask_many' : ask_many,
+		'broadcast' : broadcast,
+		/*public for testing*/
+		'clients' : clients,
+		'zombies' : zombies
 	};
 }; // server
 
